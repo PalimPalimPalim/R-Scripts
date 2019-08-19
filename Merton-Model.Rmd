@@ -1,0 +1,153 @@
+---
+title: "Merton Model"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(kableExtra)
+library(knitr)
+
+print_tbl <- function(x, f_width=F, f_size=10){
+  kable(x) %>%
+    kable_styling(full_width = f_width, font_size = f_size, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+}
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+
+is_inst <- function(pkg) {
+  # check if package is installed
+    nzchar(system.file(package = pkg))
+}
+
+stopifnot(is_inst("MASS"))
+```
+
+## Inputs
+
+### Client level
+
+```{r}
+input <- tibble(
+  id = seq(1,10),
+  pd = c(0.01,0.03,0.04,0.005,0.001,0.01,0.01,0.002,0.015,0.01),
+  lgd = c(0.5,0.5,0.9,0.5,0.2,0.5,0.5,0.5,0.3,0.5), 
+  ead = 1000 * seq(1,10),
+  countries = c("country-A","country-A","country-A","country-A","country-A","country-A","country-B","country-B","country-B","country-B"), 
+  sectors = c("sector-A", "sector-A","sector-A", "sector-B","sector-B", "sector-B","sector-B", "sector-B","sector-B", "sector-B"),
+  r_squared = c(0.1, 0.1, 0.3, 0.3, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1))
+
+print_tbl(input)
+```
+
+
+### Correlation
+
+```{r}
+cor_country <-
+  matrix(c(1,0.8,0.8,1), nrow = 2, ncol = 2, dimnames = list(c("country-A", "country-B"), c("country-A", "country-B")))
+
+cor_sector <-
+  matrix(c(1,0.5,0.5,1), nrow = 2, ncol = 2, dimnames = list(c("sector-A", "sector-B"), c("sector-A", "sector-B")))
+```
+
+
+## Asset returns
+
+$$
+A_i = \sqrt{R^2_i}\left( \sqrt{\frac{1}{2}} C_i + \sqrt{\frac{1}{2}} S_i \right) + \sqrt{1- R_i^2} \ \epsilon_i
+$$
+
+
+```{r}
+set.seed(42)
+
+# number of simulations
+n <-  1000
+
+# realized random facotrs for countries
+country_realized <- MASS::mvrnorm(n = n,mu = rep(0, nrow(cor_country)), cor_country)
+
+# realized random facotrs for sectors
+sector_realized <- MASS::mvrnorm(n = n,mu = rep(0, nrow(cor_sector)), cor_sector)
+
+# systemic realized
+systemic <- sqrt(0.5) * country_realized[ ,input$countries] + sqrt(0.5) * sector_realized[ ,input$sectors]
+colnames(systemic) <- input$id
+
+# part of asset returns which is due to systemic
+systemic_part <- systemic %*% (diag(nrow(input)) * sqrt(input$r_squared))
+colnames(systemic_part) <- input$id
+
+# idiosyncratic realized
+idiosyncratic_realized <- MASS::mvrnorm(n = n,mu = rep(0, nrow(input)), diag(nrow(input)))
+colnames(idiosyncratic_realized) <- input$id
+
+# part of asset returns which is due to idiosyncratic risk
+idiosyncratic_part <- idiosyncratic_realized %*% (diag(nrow(input)) * sqrt(1 - input$r_squared))
+colnames(idiosyncratic_part) <- input$id
+
+# resulting asset returns                                             
+asset_returns <- systemic_part + idiosyncratic_part
+colnames(asset_returns) <- input$id
+```
+
+<details><summary>Expand table with asset returns</summary>
+<p>
+```{r}
+# resulting losses
+print_tbl(asset_returns)
+```
+</p>
+</details>
+
+## Asset returns to losses
+
+```{r}
+# at which asset return would it be a default
+def_thrsld <- qnorm(input$pd)
+def_thrsld
+
+# true if defaulted in simulation n, else false
+defaulted_y_n <- asset_returns < (rep(1, n) %*% t(def_thrsld))
+
+# losses if default is lgd * ead
+losses <- defaulted_y_n %*% (input$lgd * input$ead)
+```
+
+<details><summary>Expand table with defaulted yes/ no</summary>
+<p>
+```{r}
+# resulting losses
+print_tbl(defaulted_y_n)
+```
+</p>
+</details>
+
+
+<details><summary>Expand table with losses</summary>
+<p>
+```{r}
+# resulting losses
+print_tbl(losses)
+```
+</p>
+</details>
+
+## Risk measures
+
+```{r}
+# EL
+mean(losses)
+
+# UL
+sd(losses)
+
+# VaR & ECAP
+quantile(losses,0.999) - mean(losses)
+```
