@@ -97,11 +97,11 @@ asset_returns <- systemic_part + idiosyncratic_part
 colnames(asset_returns) <- input$id
 ```
 
-<details><summary>Expand table with asset returns</summary>
+<details><summary>Expand table (head) with asset returns</summary>
 <p>
 ```{r}
 # resulting losses
-print_tbl(asset_returns)
+print_tbl(head(asset_returns))
 ```
 </p>
 </details>
@@ -120,21 +120,21 @@ defaulted_y_n <- asset_returns < (rep(1, n) %*% t(def_thrsld))
 losses <- defaulted_y_n %*% (input$lgd * input$ead)
 ```
 
-<details><summary>Expand table with defaulted yes/ no</summary>
+<details><summary>Expand table (head) with defaulted yes/ no</summary>
 <p>
 ```{r}
 # resulting losses
-print_tbl(defaulted_y_n)
+print_tbl(head(defaulted_y_n))
 ```
 </p>
 </details>
 
 
-<details><summary>Expand table with losses</summary>
+<details><summary>Expand table (head) with losses</summary>
 <p>
 ```{r}
 # resulting losses
-print_tbl(losses)
+print_tbl(head(losses))
 ```
 </p>
 </details>
